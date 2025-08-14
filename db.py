@@ -25,6 +25,7 @@ class DB:
         self.conn.executescript(SCHEMA)
 
     def upsert_user(self, user_id: int, username: Optional[str] = None) -> None:
+        cur = self.conn.cursor
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO users (user_id, username)
@@ -55,3 +56,7 @@ class DB:
         rows = cur.fetchall()
         keys = ["user_id","username","first_name_input","last_name_input","phone","status","receipt_file_id","receipt_type"]
         return [dict(zip(keys, r)) for r in rows]
+
+    def delete_user(self, user_id: int) -> None:
+        self.conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
+        self.conn.commit()
