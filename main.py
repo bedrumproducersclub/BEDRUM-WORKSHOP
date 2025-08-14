@@ -1,4 +1,5 @@
 import os
+import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode, ContentType
 from aiogram.filters import CommandStart
@@ -6,11 +7,14 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
 
 from db import DB
 from keyboards import start_kb, admin_nav_kb
 import texts
+
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 
@@ -27,7 +31,8 @@ DB_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
-bot = Bot(BOT_TOKEN, parse_mode=ParseMode.MARKDOWN)
+# Новый способ задания parse_mode в aiogram >= 3.7
+bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
 dp = Dispatcher(storage=MemoryStorage())
 db = DB(DB_PATH)
 
@@ -41,7 +46,7 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 async def send_event_card(message: Message):
-    caption = f"*{EVENT_TITLE}*\\n\\n{texts.EVENT_DESCRIPTION}\\n\\n{PRICE_TEXT}"
+    caption = f"*{EVENT_TITLE}*\n\n{texts.EVENT_DESCRIPTION}\n\n{PRICE_TEXT}"
     kb = start_kb(is_admin=is_admin(message.from_user.id))
     if IMAGE_SRC:
         try:
@@ -64,7 +69,14 @@ async def on_participate(cb: CallbackQuery, state: FSMContext):
     db.set_field(user.id, "status", "FORM_START")
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, texts.ADMIN_NEW_STARTED.format(username=user.username or "no_username", user_id=user.id, status="FORM_START"))
+            await bot.send_message(
+                admin_id,
+                texts.ADMIN_NEW_STARTED.format(
+                    username=user.username or "no_username",
+                    user_id=user.id,
+                    status="FORM_START"
+                )
+            )
         except Exception:
             pass
     await cb.message.answer(texts.ASK_FIRST_NAME)
@@ -108,10 +120,18 @@ async def got_receipt(message: Message, state: FSMContext):
         db.set_field(message.from_user.id, "status", "REGISTERED")
         for admin_id in ADMIN_IDS:
             try:
-                await bot.send_message(admin_id, texts.ADMIN_NEW_RECEIPT.format(username=message.from_user.username or "no_username", user_id=message.from_user.id))
+                await bot.send_message(
+                    admin_id,
+                    texts.ADMIN_NEW_RECEIPT.format(
+                        username=message.from_user.username or "no_username",
+                        user_id=message.from_user.id
+                    )
+                )
             except Exception:
                 pass
-        thanks = texts.THANKS_REGISTERED.format(title=EVENT_TITLE, date=EVENT_DATE, city=EVENT_CITY)
+        thanks = texts.THANKS_REGISTERED.format(
+            title=EVENT_TITLE, date=EVENT_DATE, city=EVENT_CITY
+        )
         await message.answer(thanks)
         await state.clear()
     else:
@@ -121,8 +141,6 @@ async def got_receipt(message: Message, state: FSMContext):
 async def wrong_receipt_type(message: Message, state: FSMContext):
     await message.answer(texts.REMIND_SEND_RECEIPT)
 
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 def render_user_card(u: dict) -> str:
     status = u.get("status") or "-"
     name = (u.get("first_name_input") or "") + " " + (u.get("last_name_input") or "")
@@ -131,11 +149,11 @@ def render_user_card(u: dict) -> str:
     username = ("@" + u["username"]) if u.get("username") else "-"
     has_receipt = "Да" if u.get("receipt_file_id") else "Нет"
     return (
-        f"*Заявка*\\n"
-        f"ID: `{u['user_id']}` | {username}\\n"
-        f"Имя Фамилия: {name}\\n"
-        f"Телефон: {phone}\\n"
-        f"Статус: `{status}`\\n"
+        f"*Заявка*\n"
+        f"ID: `{u['user_id']}` | {username}\n"
+        f"Имя Фамилия: {name}\n"
+        f"Телефон: {phone}\n"
+        f"Статус: `{status}`\n"
         f"Чек: {has_receipt}"
     )
 
@@ -197,7 +215,7 @@ async def admin_receipt(cb: CallbackQuery):
     if not users:
         await cb.answer()
         return
-    u = users[min(max(idx,0), len(users)-1)]
+    u = users[min(max(idx, 0), len(users)-1)]
     file_id = u.get("receipt_file_id")
     rtype = u.get("receipt_type")
     if not file_id:
@@ -205,9 +223,15 @@ async def admin_receipt(cb: CallbackQuery):
         return
     try:
         if rtype == "photo":
-            await cb.message.answer_photo(file_id, caption=f"Чек от @{u.get('username') or 'no_username'} (id={u['user_id']})")
+            await cb.message.answer_photo(
+                file_id,
+                caption=f"Чек от @{u.get('username') or 'no_username'} (id={u['user_id']})"
+            )
         else:
-            await cb.message.answer_document(file_id, caption=f"Чек от @{u.get('username') or 'no_username'} (id={u['user_id']})")
+            await cb.message.answer_document(
+                file_id,
+                caption=f"Чек от @{u.get('username') or 'no_username'} (id={u['user_id']})"
+            )
     except Exception:
         await cb.message.answer("Не удалось показать чек (возможно, файл недоступен).")
     await cb.answer()
