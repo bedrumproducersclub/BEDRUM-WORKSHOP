@@ -1,7 +1,7 @@
 import sqlite3
 from typing import Optional, Dict, Any
 
-SCHEMA = '''
+SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
   user_id INTEGER PRIMARY KEY,
   username TEXT,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at DESC);
-'''
+"""
 
 class DB:
     def __init__(self, path: str):
@@ -26,32 +26,32 @@ class DB:
 
     def upsert_user(self, user_id: int, username: Optional[str] = None) -> None:
         cur = self.conn.cursor()
-        cur.execute(\"\"\"
+        cur.execute("""
             INSERT INTO users (user_id, username)
             VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
               username=COALESCE(?, users.username),
               updated_at=CURRENT_TIMESTAMP
-        \"\"\", (user_id, username, username))
+        """, (user_id, username, username))
         self.conn.commit()
 
     def set_field(self, user_id: int, field: str, value: Any) -> None:
-        q = f\"UPDATE users SET {field}=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?\"
+        q = f"UPDATE users SET {field}=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?"
         self.conn.execute(q, (value, user_id))
         self.conn.commit()
 
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        cur.execute(\"SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users WHERE user_id=?\", (user_id,))
+        cur.execute("SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users WHERE user_id=?", (user_id,))
         row = cur.fetchone()
         if not row:
             return None
-        keys = [\"user_id\",\"username\",\"first_name_input\",\"last_name_input\",\"phone\",\"status\",\"receipt_file_id\",\"receipt_type\"]
+        keys = ["user_id","username","first_name_input","last_name_input","phone","status","receipt_file_id","receipt_type"]
         return dict(zip(keys, row))
 
     def all_users(self):
         cur = self.conn.cursor()
-        cur.execute(\"SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users ORDER BY updated_at DESC\")
+        cur.execute("SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users ORDER BY updated_at DESC")
         rows = cur.fetchall()
-        keys = [\"user_id\",\"username\",\"first_name_input\",\"last_name_input\",\"phone\",\"status\",\"receipt_file_id\",\"receipt_type\"]
+        keys = ["user_id","username","first_name_input","last_name_input","phone","status","receipt_file_id","receipt_type"]
         return [dict(zip(keys, r)) for r in rows]
