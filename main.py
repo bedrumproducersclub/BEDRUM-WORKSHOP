@@ -11,7 +11,7 @@ from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
 
 from db import DB
-from keyboards import start_kb, admin_nav_kb
+from keyboards import start_kb, admin_nav_kb, admin_confirm_delete_kb
 import texts
 
 logging.basicConfig(level=logging.INFO)
@@ -31,13 +31,12 @@ DB_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
-# aiogram >= 3.7
 bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
 dp = Dispatcher(storage=MemoryStorage())
 db = DB(DB_PATH)
 
 class Reg(StatesGroup):
-    waiting_name = State()       # <-- один шаг: имя и фамилия
+    waiting_name = State()
     waiting_phone = State()
     waiting_receipt = State()
 
@@ -78,13 +77,12 @@ async def on_participate(cb: CallbackQuery, state: FSMContext):
             )
         except Exception:
             pass
-    await cb.message.answer(texts.ASK_NAME)  # <-- новый текст
+    await cb.message.answer(texts.ASK_NAME)
     await state.set_state(Reg.waiting_name)
     await cb.answer()
 
 @dp.message(Reg.waiting_name, F.text.len() > 0)
 async def got_name(message: Message, state: FSMContext):
-    # Парсим "Имя Фамилия" (первое слово — имя, остальное — фамилия)
     raw = " ".join(message.text.split()).strip()
     if not raw:
         await message.answer(texts.ASK_NAME)
@@ -172,7 +170,7 @@ async def admin_panel(cb: CallbackQuery):
         return
     idx = 0
     text = render_user_card(users[idx])
-    await cb.message.answer(text, reply_markup=admin_nav_kb(idx))
+    await cb.message.answer(text, reply_markup=admin_nav_kb(idx, users[idx]["user_id"]))
     await cb.answer()
 
 @dp.callback_query(F.data.startswith("admin_prev:"))
@@ -187,7 +185,7 @@ async def admin_prev(cb: CallbackQuery):
         await cb.answer()
         return
     text = render_user_card(users[idx])
-    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx))
+    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx, users[idx]["user_id"]))
     await cb.answer()
 
 @dp.callback_query(F.data.startswith("admin_next:"))
@@ -204,7 +202,7 @@ async def admin_next(cb: CallbackQuery):
     if idx >= len(users):
         idx = len(users) - 1
     text = render_user_card(users[idx])
-    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx))
+    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx, users[idx]["user_id"]))
     await cb.answer()
 
 @dp.callback_query(F.data.startswith("admin_receipt:"))
@@ -238,6 +236,66 @@ async def admin_receipt(cb: CallbackQuery):
     except Exception:
         await cb.message.answer("Не удалось показать чек (возможно, файл недоступен).")
     await cb.answer()
+
+# --- Удаление заявки (двухшаговое подтверждение) ---
+
+@dp.callback_query(F.data.startswith("admin_delete:"))
+async def admin_delete(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer("Недостаточно прав.", show_alert=True)
+        return
+    _, user_id_s, idx_s = cb.data.split(":")
+    user_id = int(user_id_s)
+    idx = int(idx_s)
+    await cb.message.edit_text(
+        f"Удалить заявку пользователя ID `{user_id}`? Это действие необратимо.",
+        reply_markup=admin_confirm_delete_kb(user_id, idx),
+    )
+    await cb.answer()
+
+@dp.callback_query(F.data.startswith("admin_confirm_delete:"))
+async def admin_confirm_delete(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer("Недостаточно прав.", show_alert=True)
+        return
+    _, user_id_s, idx_s = cb.data.split(":")
+    user_id = int(user_id_s)
+    idx = int(idx_s)
+
+    # удаляем пользователя
+    db.delete_user(user_id)
+
+    # подготавливаем следующий экран
+    users = db.all_users()
+    if not users:
+        await cb.message.edit_text("Заявка удалена. Заявок больше нет.")
+        await cb.answer("Удалено")
+        return
+
+    # после удаления остаёмся на том же индексе (он «сдвинется» на следующего)
+    if idx >= len(users):
+        idx = len(users) - 1
+    text = render_user_card(users[idx])
+    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx, users[idx]["user_id"]))
+    await cb.answer("Удалено")
+
+@dp.callback_query(F.data.startswith("admin_cancel_delete:"))
+async def admin_cancel_delete(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer("Недостаточно прав.", show_alert=True)
+        return
+    _, idx_s = cb.data.split(":")
+    idx = int(idx_s)
+    users = db.all_users()
+    if not users:
+        await cb.message.edit_text("Заявок пока нет.")
+        await cb.answer()
+        return
+    if idx >= len(users):
+        idx = len(users) - 1
+    text = render_user_card(users[idx])
+    await cb.message.edit_text(text, reply_markup=admin_nav_kb(idx, users[idx]["user_id"]))
+    await cb.answer("Отменено")
 
 @dp.message()
 async def any_message(message: Message):
