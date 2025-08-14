@@ -31,14 +31,13 @@ DB_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
-# Новый способ задания parse_mode в aiogram >= 3.7
+# aiogram >= 3.7
 bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
 dp = Dispatcher(storage=MemoryStorage())
 db = DB(DB_PATH)
 
 class Reg(StatesGroup):
-    waiting_first_name = State()
-    waiting_last_name = State()
+    waiting_name = State()       # <-- один шаг: имя и фамилия
     waiting_phone = State()
     waiting_receipt = State()
 
@@ -79,19 +78,23 @@ async def on_participate(cb: CallbackQuery, state: FSMContext):
             )
         except Exception:
             pass
-    await cb.message.answer(texts.ASK_FIRST_NAME)
-    await state.set_state(Reg.waiting_first_name)
+    await cb.message.answer(texts.ASK_NAME)  # <-- новый текст
+    await state.set_state(Reg.waiting_name)
     await cb.answer()
 
-@dp.message(Reg.waiting_first_name, F.text.len() > 0)
-async def got_first_name(message: Message, state: FSMContext):
-    db.set_field(message.from_user.id, "first_name_input", message.text.strip())
-    await message.answer(texts.ASK_LAST_NAME)
-    await state.set_state(Reg.waiting_last_name)
+@dp.message(Reg.waiting_name, F.text.len() > 0)
+async def got_name(message: Message, state: FSMContext):
+    # Парсим "Имя Фамилия" (первое слово — имя, остальное — фамилия)
+    raw = " ".join(message.text.split()).strip()
+    if not raw:
+        await message.answer(texts.ASK_NAME)
+        return
+    parts = raw.split(" ", 1)
+    first = parts[0]
+    last = parts[1] if len(parts) > 1 else ""
+    db.set_field(message.from_user.id, "first_name_input", first)
+    db.set_field(message.from_user.id, "last_name_input", last)
 
-@dp.message(Reg.waiting_last_name, F.text.len() > 0)
-async def got_last_name(message: Message, state: FSMContext):
-    db.set_field(message.from_user.id, "last_name_input", message.text.strip())
     await message.answer(texts.ASK_PHONE)
     await state.set_state(Reg.waiting_phone)
 
