@@ -10,7 +10,7 @@ import texts
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
+ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 EVENT_TITLE = os.getenv("EVENT_TITLE")
 EVENT_DATE = os.getenv("EVENT_DATE")
 EVENT_CITY = os.getenv("EVENT_CITY")
