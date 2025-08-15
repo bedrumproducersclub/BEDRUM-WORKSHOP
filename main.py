@@ -1,48 +1,52 @@
-import os
 import logging
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
-from aiogram.types import Message
-from aiogram.utils.keyboard import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
-from db import init_db
-from texts import get_event_caption
+from aiogram.types import FSInputFile
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
+import asyncio
 
+from texts import (
+    EVENT_DESCRIPTION,
+    ASK_NAME,
+    ASK_PHONE,
+    AFTER_FORM,
+    THANKS_REGISTERED,
+    REMIND_SEND_RECEIPT,
+    ADMIN_NEW_STARTED,
+    ADMIN_NEW_RECEIPT
+)
+from keyboards import main_keyboard, admin_keyboard
+
+# ====== НАСТРОЙКИ ======
+BOT_TOKEN = "ТОКЕН_ТВОЕГО_БОТА"
+ADMIN_IDS = [123456789]  # ID админов
+IMAGE_URL_OR_FILE_ID = "images/bedrum-ws-28-08.png"  # путь к картинке в проекте
+
+# ====== ЛОГИ ======
 logging.basicConfig(level=logging.INFO)
 
-# Загружаем переменные окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
-IMAGE_PATH = os.getenv("IMAGE_PATH")
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
-
-# Проверка токена
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден в .env!")
-
-bot = Bot(BOT_TOKEN, default=ParseMode.MARKDOWN)
+# ====== ИНИЦИАЛИЗАЦИЯ ======
+bot = Bot(BOT_TOKEN, parse_mode=ParseMode.MARKDOWN)
 dp = Dispatcher()
 
-# Инициализация базы
-init_db(DATABASE_PATH)
-
-# Главное меню
-def main_keyboard():
-    kb = [
-        [KeyboardButton(text="Отправить трек")],
-        [KeyboardButton(text="Панель админа")] if ADMIN_IDS else []
-    ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
+# ====== ХЭНДЛЕРЫ ======
 @dp.message(Command("start"))
-async def start_cmd(message: Message):
-    caption = get_event_caption()
-    try:
-        with open(IMAGE_PATH, "rb") as photo:
-            await message.answer_photo(photo=photo, caption=caption, reply_markup=main_keyboard())
-    except Exception as e:
-        await message.answer(f"Ошибка загрузки изображения: {e}", reply_markup=main_keyboard())
+async def start_cmd(message: types.Message):
+    caption = EVENT_DESCRIPTION
+    await message.answer_photo(
+        photo=FSInputFile(IMAGE_URL_OR_FILE_ID),
+        caption=caption,
+        reply_markup=main_keyboard()
+    )
+
+@dp.message(F.text == "📝 Зарегистрироваться")
+async def register(message: types.Message):
+    await message.answer(ASK_NAME)
+
+# ====== СТАРТ ======
+async def main():
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(dp.start_polling(bot))
+    asyncio.run(main())
