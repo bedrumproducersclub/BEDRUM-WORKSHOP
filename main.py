@@ -21,7 +21,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
 EVENT_TITLE = os.getenv("EVENT_TITLE", "BEDRUM WORKSHOP")
-EVENT_DATE = os.getenv("EVENT_DATE", "28 августа")
+EVENT_DATE = os.getenv("EVENT_DATE", "26 августа, 18:00")
 EVENT_CITY = os.getenv("EVENT_CITY", "Алматы")
 PRICE_TEXT = os.getenv("PRICE_TEXT", "Стоимость участия: 20 000 ₸")
 PAYMENT_TEXT = os.getenv("PAYMENT_TEXT", "Оплата по номеру Kaspi ...")
