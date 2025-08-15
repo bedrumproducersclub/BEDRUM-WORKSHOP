@@ -25,7 +25,12 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
-IMAGE_URL = os.getenv("IMAGE_URL")
+
+# IMAGE_URL может отсутствовать — дадим безопасный фолбэк
+IMAGE_URL = os.getenv(
+    "IMAGE_URL",
+    "https://raw.githubusercontent.com/bedrumproducersclub/BEDRUM-WORKSHOP/main/images/bedrum_ws_28_08.png"
+)
 EVENT_TITLE = os.getenv("EVENT_TITLE", "")
 EVENT_DATE = os.getenv("EVENT_DATE", "")
 EVENT_CITY = os.getenv("EVENT_CITY", "")
@@ -58,14 +63,31 @@ def render_user_card(u: dict, pos: int, total: int) -> str:
         f"Чек: {has_receipt}"
     )
 
+async def send_event_card(message: Message, reply_markup):
+    """
+    Надёжная отправка карточки:
+    - если IMAGE_URL строка → шлём фото;
+    - если пусто/None → шлём только текст, чтобы не упасть.
+    """
+    caption = EVENT_DESCRIPTION
+    try:
+        url = (IMAGE_URL or "").strip()
+        if url:
+            await message.answer_photo(photo=url, caption=caption, reply_markup=reply_markup)
+        else:
+            await message.answer(text=caption, reply_markup=reply_markup)
+    except Exception as e:
+        # Если вдруг URL битый — отправим текст, чтобы бот не падал
+        logging.warning(f"Failed to send photo: {e}")
+        await message.answer(text=caption, reply_markup=reply_markup)
+
 # ===== Старт =====
 @dp.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     db.upsert_user(message.from_user.id, message.from_user.username)
     await state.clear()
-    await message.answer_photo(
-        photo=IMAGE_URL,
-        caption=EVENT_DESCRIPTION,
+    await send_event_card(
+        message=message,
         reply_markup=start_kb(is_admin(message.from_user.id))
     )
 
@@ -225,7 +247,6 @@ async def admin_cancel_delete(cb: CallbackQuery):
 
 # ===== Оплатившие — список сообщением =====
 def _chunk_msgs(text: str, limit: int = 3900):
-    # Telegram лимит ~4096, оставим запас на форматирование
     lines = text.splitlines(keepends=True)
     buf = ""
     for line in lines:
@@ -249,7 +270,6 @@ async def admin_list_paid(cb: CallbackQuery):
         await cb.message.answer("Оплативших пока нет.")
         return
 
-    # Формируем читаемый список
     header = f"*Оплатившие ({len(paid)})*\n"
     lines = []
     for i, u in enumerate(paid, 1):
@@ -259,8 +279,6 @@ async def admin_list_paid(cb: CallbackQuery):
         lines.append(f"{i}) {username} (id={u['user_id']}) — {name} — {phone}\n")
 
     text = header + "".join(lines)
-
-    # Если список большой — разобьём на несколько сообщений
     for chunk in _chunk_msgs(text):
         await cb.message.answer(chunk)
     await cb.answer()
