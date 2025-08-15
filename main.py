@@ -1,51 +1,70 @@
 import os
-import logging
-from aiogram import Bot, Dispatcher, F
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
-from aiogram.types import Message
-from aiogram.utils.keyboard import ReplyKeyboardMarkup, KeyboardButton
-from db import DB
-import texts
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram import F
+import asyncio
 
-logging.basicConfig(level=logging.INFO)
+# Загружаем .env локально
+load_dotenv()
 
+# Читаем переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
 EVENT_TITLE = os.getenv("EVENT_TITLE")
 EVENT_DATE = os.getenv("EVENT_DATE")
 EVENT_CITY = os.getenv("EVENT_CITY")
 PRICE_TEXT = os.getenv("PRICE_TEXT")
 PAYMENT_TEXT = os.getenv("PAYMENT_TEXT")
-IMAGE_SRC = os.getenv("IMAGE_URL_OR_FILE_ID")
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
+IMAGE_URL_OR_FILE_ID = os.getenv("IMAGE_URL_OR_FILE_ID")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "./database.sqlite3")
 
+# Проверка переменных
+required_vars = {
+    "BOT_TOKEN": BOT_TOKEN,
+    "ADMIN_IDS": ADMIN_IDS,
+    "EVENT_TITLE": EVENT_TITLE,
+    "EVENT_DATE": EVENT_DATE,
+    "EVENT_CITY": EVENT_CITY,
+    "PRICE_TEXT": PRICE_TEXT,
+    "PAYMENT_TEXT": PAYMENT_TEXT,
+    "IMAGE_URL_OR_FILE_ID": IMAGE_URL_OR_FILE_ID,
+    "DATABASE_PATH": DATABASE_PATH
+}
+
+missing_vars = [k for k, v in required_vars.items() if not v]
+if missing_vars:
+    raise ValueError(f"Отсутствуют обязательные переменные окружения: {', '.join(missing_vars)}")
+
+# Создаем бота
 bot = Bot(BOT_TOKEN, default=ParseMode.MARKDOWN)
 dp = Dispatcher()
-db = DB(DATABASE_PATH)
 
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+# Кнопки
+def main_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Оплатить участие", callback_data="pay")
+    return kb.as_markup()
 
-def start_kb(is_admin=False):
-    buttons = [["Записаться"], ["Реквизиты для оплаты"]]
-    if is_admin:
-        buttons.append(["Панель админа"])
-    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=b) for b in row] for row in buttons], resize_keyboard=True)
+@dp.message(Command("start"))
+async def start_cmd(message: types.Message):
+    caption = (
+        f"*{EVENT_TITLE}*\n\n"
+        f"📅 Дата: {EVENT_DATE}\n"
+        f"📍 Город: {EVENT_CITY}\n\n"
+        f"{PRICE_TEXT}"
+    )
+    await message.answer_photo(photo=IMAGE_URL_OR_FILE_ID, caption=caption, reply_markup=main_keyboard())
 
-async def send_event_card(message: Message):
-    caption = f"*{EVENT_TITLE}*\n\n{texts.EVENT_DESCRIPTION}\n\n{PRICE_TEXT}"
-    kb = start_kb(is_admin=is_admin(message.from_user.id))
-    try:
-        await message.answer_photo(IMAGE_SRC, caption=caption, reply_markup=kb)
-    except Exception:
-        await message.answer(caption, reply_markup=kb)
+@dp.callback_query(F.data == "pay")
+async def send_payment_info(callback: types.CallbackQuery):
+    await callback.message.answer(PAYMENT_TEXT)
 
-@dp.message(F.text == "/start")
-async def on_start(message: Message):
-    await send_event_card(message)
+async def main():
+    await dp.start_polling(bot)
 
-@dp.message(F.text == "Реквизиты для оплаты")
-async def send_payment(message: Message):
-    await message.answer(PAYMENT_TEXT)
-
-# Остальной код бота — тут твои обработчики записи и панели админа
+if __name__ == "__main__":
+    asyncio.run(main())
