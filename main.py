@@ -23,10 +23,24 @@ ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
 EVENT_TITLE = os.getenv("EVENT_TITLE", "BEDRUM WORKSHOP")
 EVENT_DATE = os.getenv("EVENT_DATE", "26 августа, 18:00")
 EVENT_CITY = os.getenv("EVENT_CITY", "Алматы")
-PRICE_TEXT = os.getenv("PRICE_TEXT", "Стоимость участия: 20 000 ₸")
-PAYMENT_TEXT = os.getenv("PAYMENT_TEXT", "Оплата по номеру Kaspi ...")
+
+# картинка из URL или file_id
 IMAGE_SRC = os.getenv("IMAGE_URL_OR_FILE_ID", "").strip() or None
+
+# База данных
 DB_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
+
+# Реквизиты
+CARD_NUMBER = os.getenv("CARD_NUMBER", "4400430273091030")
+KASPI_NUMBER = os.getenv("KASPI_NUMBER", "87077523456")
+KASPI_NAME = os.getenv("KASPI_NAME", "Тимур Д.")
+
+# Собираем текст реквизитов
+PAYMENT_TEXT = (
+    f"Номер карты: {CARD_NUMBER}\n"
+    f"Номер Каспи: {KASPI_NUMBER} ({KASPI_NAME})"
+)
+
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
