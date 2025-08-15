@@ -59,3 +59,6 @@ class DB:
     def delete_user(self, user_id: int) -> None:
         self.conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
         self.conn.commit()
+
+# Инициализация глобальной БД
+db = DB(path=os.getenv("DATABASE_PATH", "./bedrum.sqlite3"))
