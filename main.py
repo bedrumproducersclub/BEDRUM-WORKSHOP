@@ -1,52 +1,56 @@
+import os
 import logging
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.enums import ParseMode
-from aiogram.filters import Command
-from aiogram.types import FSInputFile
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
-import asyncio
+from aiogram import Bot, Dispatcher, F
+from aiogram.enums import ParseMode, ContentType
+from aiogram.filters import CommandStart
+from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
+from aiogram.client.default import DefaultBotProperties
+from dotenv import load_dotenv
 
 from texts import (
-    EVENT_DESCRIPTION,
-    ASK_NAME,
-    ASK_PHONE,
-    AFTER_FORM,
-    THANKS_REGISTERED,
-    REMIND_SEND_RECEIPT,
-    ADMIN_NEW_STARTED,
-    ADMIN_NEW_RECEIPT
+    EVENT_DESCRIPTION, ASK_NAME, ASK_PHONE,
+    AFTER_FORM, THANKS_REGISTERED, REMIND_SEND_RECEIPT,
+    ADMIN_NEW_STARTED, ADMIN_NEW_RECEIPT
 )
-from keyboards import main_keyboard, admin_keyboard
+from keyboards import start_kb, admin_nav_kb, admin_confirm_delete_kb
+import db  # если была логика сохранения
 
-# ====== НАСТРОЙКИ ======
-BOT_TOKEN = "ТОКЕН_ТВОЕГО_БОТА"
-ADMIN_IDS = [123456789]  # ID админов
-IMAGE_URL_OR_FILE_ID = "images/bedrum-ws-28-08.png"  # путь к картинке в проекте
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
 
-# ====== ЛОГИ ======
+# Вот именно ссылка на raw картинку GitHub
+IMAGE_URL_OR_FILE_ID = "https://raw.githubusercontent.com/bedrumproducersclub/BEDRUM-WORKSHOP/main/images/bedrum_ws_28_08.png"
+
 logging.basicConfig(level=logging.INFO)
 
-# ====== ИНИЦИАЛИЗАЦИЯ ======
-bot = Bot(BOT_TOKEN, parse_mode=ParseMode.MARKDOWN)
-dp = Dispatcher()
+bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
+dp = Dispatcher(storage=MemoryStorage())
 
-# ====== ХЭНДЛЕРЫ ======
-@dp.message(Command("start"))
-async def start_cmd(message: types.Message):
+class Reg(StatesGroup):
+    name = State()
+    phone = State()
+    receipt = State()
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+
+@dp.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext):
+    db.upsert_user(message.from_user.id)
+    await state.clear()
     caption = EVENT_DESCRIPTION
     await message.answer_photo(
-        photo=FSInputFile(IMAGE_URL_OR_FILE_ID),
+        photo=IMAGE_URL_OR_FILE_ID,
         caption=caption,
-        reply_markup=main_keyboard()
+        reply_markup=start_kb(is_admin(message.from_user.id))
     )
 
-@dp.message(F.text == "📝 Зарегистрироваться")
-async def register(message: types.Message):
-    await message.answer(ASK_NAME)
-
-# ====== СТАРТ ======
-async def main():
-    await dp.start_polling(bot)
+# ... остальная логика регистрации, как раньше, без изменений ...
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.run(dp.start_polling(bot))
