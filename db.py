@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from typing import Optional, Dict, Any
 
@@ -42,23 +43,50 @@ class DB:
 
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        cur.execute("SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users WHERE user_id=?", (user_id,))
+        cur.execute("""
+            SELECT user_id, username, first_name_input, last_name_input,
+                   phone, status, receipt_file_id, receipt_type
+            FROM users WHERE user_id=?
+        """, (user_id,))
         row = cur.fetchone()
         if not row:
             return None
-        keys = ["user_id","username","first_name_input","last_name_input","phone","status","receipt_file_id","receipt_type"]
+        keys = ["user_id","username","first_name_input","last_name_input",
+                "phone","status","receipt_file_id","receipt_type"]
         return dict(zip(keys, row))
 
     def all_users(self):
         cur = self.conn.cursor()
-        cur.execute("SELECT user_id, username, first_name_input, last_name_input, phone, status, receipt_file_id, receipt_type FROM users ORDER BY updated_at DESC")
+        cur.execute("""
+            SELECT user_id, username, first_name_input, last_name_input,
+                   phone, status, receipt_file_id, receipt_type
+            FROM users
+            ORDER BY updated_at DESC
+        """)
         rows = cur.fetchall()
-        keys = ["user_id","username","first_name_input","last_name_input","phone","status","receipt_file_id","receipt_type"]
+        keys = ["user_id","username","first_name_input","last_name_input",
+                "phone","status","receipt_file_id","receipt_type"]
         return [dict(zip(keys, r)) for r in rows]
 
     def delete_user(self, user_id: int) -> None:
         self.conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
         self.conn.commit()
 
-# Инициализация глобальной БД
-db = DB(path=os.getenv("DATABASE_PATH", "./bedrum.sqlite3"))
+# ---------- Singleton + модульные обёртки ----------
+_DB_PATH = os.getenv("DATABASE_PATH", "./bedrum.sqlite3")
+_db = DB(_DB_PATH)
+
+def upsert_user(user_id: int, username: Optional[str] = None) -> None:
+    return _db.upsert_user(user_id, username)
+
+def set_field(user_id: int, field: str, value: Any) -> None:
+    return _db.set_field(user_id, field, value)
+
+def get_user(user_id: int) -> Optional[Dict[str, Any]]:
+    return _db.get_user(user_id)
+
+def all_users():
+    return _db.all_users()
+
+def delete_user(user_id: int) -> None:
+    return _db.delete_user(user_id)
