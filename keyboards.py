@@ -15,7 +15,8 @@ def admin_nav_kb(idx: int, user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="▶️ Далее", callback_data=f"admin_next:{idx}")
         ],
         [InlineKeyboardButton(text="🧾 Показать чек", callback_data=f"admin_receipt:{idx}")],
-        [InlineKeyboardButton(text="🗑 Удалить заявку", callback_data=f"admin_delete:{user_id}:{idx}")]
+        [InlineKeyboardButton(text="🗑 Удалить заявку", callback_data=f"admin_delete:{user_id}:{idx}")],
+        [InlineKeyboardButton(text="📋 Оплатившие", callback_data="admin_list_paid")]
     ])
 
 def admin_confirm_delete_kb(user_id: int, idx: int) -> InlineKeyboardMarkup:
