@@ -25,7 +25,6 @@ class DB:
         self.conn.executescript(SCHEMA)
 
     def upsert_user(self, user_id: int, username: Optional[str] = None) -> None:
-        cur = self.conn.cursor
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO users (user_id, username)
